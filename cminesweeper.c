@@ -29,12 +29,20 @@ typedef struct box_t
   unsigned int num_mines_around;
 } __attribute__((packed)) box_t;
 
+typedef struct gameboard_t
+{
+  box_t * board;
+  unsigned int columns;
+  unsigned int rows;
+  unsigned int number_mines;
+
+} gameboard_t;  
+
+gameboard_t gboard;
+
 // GLOBALS
-box_t * gameboard = NULL;
-unsigned int columns = 0;
-unsigned int rows = 0;
-unsigned int number_mines = 0;
 FILE * random_number_bag;
+
 
 // https://github.com/GNOME/gnome-mines/blob/master/src/minefield.vala#L49
 int neighbor_map[8][2] = {
@@ -50,8 +58,9 @@ int neighbor_map[8][2] = {
 
 
 
-// #define GET_LOC(ROW, COL) gameboard[(ROW * sizeof(box_t)) + (COL * sizeof(box_t)) * sizeof(box_t)]
-#define GET_LOC(ROW, COL) gameboard[((ROW + COL + sizeof(box_t)) * sizeof(box_t))]
+// #define GET_LOC(ROW, COL) gameboard[(ROW  + (COL))]
+#define GET_LOC(r, c) (gboard.board[((r) * (gboard.columns)) + (c)])
+// #define GET_LOC(ROW, COL) gameboard[((ROW + COL + sizeof(box_t)) * sizeof(box_t))]
 
 /**
  * Rules:
@@ -72,6 +81,8 @@ static void parse_options(int argc, char ** argv);
 static unsigned int get_random_number(unsigned int max);
 
 
+
+
 int main(int argc, char ** argv)
 {
   random_number_bag = fopen("/dev/urandom","rb");
@@ -80,28 +91,57 @@ int main(int argc, char ** argv)
     printf("Failed to open random number bag: cminesweeper.c:%d\n",__LINE__);
     exit(1);
   }
-  init_board(EASY_COLS, EASY_ROWS);
+  parse_options(argc, argv);
+  printf("%p\n",gboard);
+
+  get_surrounding_mines(gboard.rows, gboard.columns);
+  debug_dump_board_info();
+  free_board();
+  fclose(random_number_bag);
+} 
+
+void parse_options(int argc, char ** argv)
+{
+  int ccol = 0, crow = 0, cmines = 0;
+
+  if(argc == 1 || strcmp(argv[1], "medium") == 0)
+  {
+    ccol =   MED_COLS;
+    crow =   MED_ROWS;
+    cmines = MED_NUM_MINES;
+  }
+  else if(strcmp(argv[1], "hard") == 0)
+  {
+    ccol =   HARD_COLS;
+    crow =   HARD_ROWS;
+    cmines = HARD_NUM_MINES;
+  } 
+  else if(strcmp(argv[1], "easy") == 0)
+  {
+    ccol =   EASY_COLS;
+    crow =   EASY_ROWS;
+    cmines = EASY_NUM_MINES;
+  } else {
+    printf("Unknown difficulty\n");
+    exit(1);
+  }
+
+  init_board(ccol, crow);
   
-  if(generate_board(EASY_NUM_MINES, EASY_COLS, EASY_ROWS) == -1)
+  if(generate_board(cmines, ccol, crow) == -1)
   {
     printf("Failed to generate board\n.");
     free_board(); // just to be safe.
     exit(1);
   }
   
-  printf("%p\n",gameboard);
-
-  get_surrounding_mines(rows, columns);
-  debug_dump_board_info();
-  free_board();
-  fclose(random_number_bag);
-} 
+}
 
 
 int generate_board(unsigned int num_mines, unsigned int num_cols, unsigned int num_rows)
 {
-  if(!gameboard) return -1;
-  number_mines = num_mines;
+  if(!gboard.board) return -1;
+  gboard.number_mines = num_mines;
   
   
   int mines_placed = 0;
@@ -130,13 +170,13 @@ int generate_board(unsigned int num_mines, unsigned int num_cols, unsigned int n
 
 void init_board(unsigned int num_cols, unsigned int num_rows)
 {
-  gameboard = (box_t *)malloc(sizeof(box_t) * (num_cols * num_rows));
-  memset(gameboard, 0, sizeof(box_t) * (num_cols * num_rows));
-  columns = num_cols;
-  rows = num_rows;
-  for(int row = 0; row < rows; row++)
+  gboard.board = (box_t *)malloc(sizeof(box_t) * (num_cols * num_rows));
+  memset(gboard.board, 0, sizeof(box_t) * (num_cols * num_rows));
+  gboard.columns = num_cols;
+  gboard.rows = num_rows;
+  for(int row = 0; row < gboard.rows; row++)
   {
-    for(int col = 0; col < columns; col++)
+    for(int col = 0; col < gboard.columns; col++)
     {
       box_t * cloc = &GET_LOC(row, col);
       cloc->box_type = 0;
@@ -147,7 +187,7 @@ void init_board(unsigned int num_cols, unsigned int num_rows)
 
 void free_board()
 {
-  if(gameboard) free(gameboard);
+  if(gboard.board) free(gboard.board);
 }
 
 
@@ -170,9 +210,9 @@ unsigned int get_random_number(unsigned int max)
 
 void debug_dump_board_info()
 {
-  for(int row = 0; row < rows; row++)
+  for(int row = 0; row < gboard.rows; row++)
   {
-    for(int col = 0; col < columns; col++)
+    for(int col = 0; col < gboard.columns; col++)
     {
         
       box_t * loc = &GET_LOC(row,col);
@@ -207,7 +247,7 @@ void get_surrounding_mines(unsigned int row, unsigned int col)
       if(curloc->box_type != BOX_TYPE_MINE) curloc->box_type = BOX_TYPE_EMPTY;
       curloc->num_mines_around = 0;
       if(curloc->box_type == BOX_TYPE_EMPTY)
-        curloc->num_mines_around = calculate_surrounding_mines(curloc, r, c);
+        curloc->num_mines_around += calculate_surrounding_mines(curloc, r, c);
     }
   }
 }
@@ -245,16 +285,12 @@ int calculate_surrounding_mines(const box_t * const loc, unsigned int row, unsig
 
   for(int i = 0; i < 9; i++)
   {
-    int nx = neighbor_map[i][0];
-    int ny = neighbor_map[i][1];
+    int nx = neighbor_map[i][1];
+    int ny = neighbor_map[i][0];
 
     int ncol = ny + col;
     int nrow = nx + row;
-
-    if((ncol < 0 || ncol > columns) || (nrow < 0 || nrow > rows)) 
-    {
-      // do nothign
-    }
+    if(ncol < 0 || ncol > gboard.columns || nrow < 0 || nrow > gboard.rows) continue;
     else {
       const box_t * current_loc = &GET_LOC(ncol, nrow);
       if(current_loc->box_type == BOX_TYPE_MINE) num_mines_found++;
