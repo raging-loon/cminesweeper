@@ -93,7 +93,6 @@ int main(int argc, char ** argv)
   }
   parse_options(argc, argv);
   printf("%p\n",gboard);
-  debug_dump_board_info();
   get_surrounding_mines(gboard.rows, gboard.columns);
   debug_dump_board_info();
   free_board();
@@ -246,13 +245,9 @@ void get_surrounding_mines(unsigned int row, unsigned int col)
     {
       
       gbox * curloc = &GET_LOC(r,c);
-      if(curloc->box_type != BOX_TYPE_MINE) curloc->box_type = BOX_TYPE_EMPTY;
-      curloc->num_mines_around = 0;
-      if(curloc->box_type == BOX_TYPE_EMPTY)
-      {
-        curloc->num_mines_around += calculate_surrounding_mines(curloc, r, c);
-        printf("mines around (%d,%d): %d\n", r, c, curloc->num_mines_around);
-      }
+      if(curloc->box_type == BOX_TYPE_MINE)
+        calculate_surrounding_mines(curloc, r, c);
+      
     }
   }
 }
@@ -263,7 +258,7 @@ void get_surrounding_mines(unsigned int row, unsigned int col)
 int calculate_surrounding_mines(const gbox * const loc, unsigned int row, unsigned int col)
 {
   int num_mines_found = 0;
-  if(loc->box_type == BOX_TYPE_MINE) return num_mines_found;
+  if(loc->box_type == BOX_TYPE_EMPTY) return num_mines_found;
 
   /**
    * Assuming the current loc is @, we look here:
@@ -303,13 +298,8 @@ int calculate_surrounding_mines(const gbox * const loc, unsigned int row, unsign
 
     if(nrow >= 0 && nrow <= gboard.rows -1&& ncol >= 0 && ncol <= gboard.columns-1)
     {
-      const gbox * current_loc = &GET_LOC(ncol, nrow);
-        if(current_loc->box_type == BOX_TYPE_MINE)
-        {
-        num_mines_found++;
-        printf("(%d,%d): %d\n",nrow,ncol, current_loc->box_type);
-
-        } 
+      gbox * loc = &GET_LOC(nrow, ncol);
+      loc->num_mines_around++; 
 
     }
   }
