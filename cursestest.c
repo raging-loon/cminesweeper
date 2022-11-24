@@ -20,10 +20,16 @@ const char boardlayout[8][8] = {
   {'o','o','o','o','o','*','o','o'},
   {'o','o','o','o','o','o','o','o'}
 };
+WINDOW * gamewindows;
+
+
+
 
 static void print_board(WINDOW * win, int curx, int cury);
-
+static bool is_curloc_mine(int x, int y);
 static void initboard();
+static void cleanup();
+static void gameover();
 
 int main()
 {
@@ -32,7 +38,7 @@ int main()
   clear();
   noecho();
   cbreak();
-  WINDOW * gamewindows = newwin(rows *2, cols*2, 0,0);
+  gamewindows = newwin(rows *2, cols*2, 0,0);
   int ch;
   int currow = 0, curcol = 0;
   keypad(gamewindows, true);
@@ -55,7 +61,17 @@ int main()
         curcol++;
         break;
       case KEY_BACKSPACE:
-        goto end;
+        cleanup();
+        return 0;
+      case 'e':
+      {
+
+        if(is_curloc_mine(currow, curcol))
+        {
+          gameover();
+          return 1;
+        }
+      }
       default:
         continue;
     }
@@ -71,10 +87,7 @@ int main()
     // wrefresh(gamewindows);
 
   }
- end: 
-
-  delwin(gamewindows);
-  endwin();
+  cleanup();
 }
 
 
@@ -103,4 +116,23 @@ void print_board(WINDOW * win, int curx, int cury)
     // wprintw(win,"\n");
   }
   refresh();
+}
+
+
+bool is_curloc_mine(int x, int y)
+{
+  if(boardlayout[x][y] == '*') return true;
+  return false;
+}
+
+void cleanup()
+{
+  delwin(gamewindows);
+  endwin();
+}
+
+void gameover()
+{
+  cleanup();
+  printf("Game over\n");
 }
