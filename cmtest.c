@@ -21,7 +21,8 @@
 #define HARD_COLS         30
 #define HARD_ROWS         16
 
-
+#define REVEALED_COLOR    0x19
+#define FLAG_COLOR        0x90
 
 typedef struct gbox
 { 
@@ -34,10 +35,12 @@ typedef struct gbox
 typedef struct gameboard
 {
   gbox * board;
+  gbox ** mines;
   unsigned int columns;
   unsigned int rows;
   unsigned int number_mines;
-
+  unsigned int num_places_revealed;
+  unsigned int flags_placed;
 } gameboard;  
 
 gameboard gboard;
@@ -111,6 +114,10 @@ int main(int argc, char ** argv)
 	init_window();
 
 	keypad(gamewindow, true);
+  start_color();
+
+  init_pair(REVEALED_COLOR, COLOR_BLACK, COLOR_BLUE);
+  init_pair(FLAG_COLOR, COLOR_BLACK, COLOR_RED);
 
 	movement_handler();
 	getch();
@@ -145,6 +152,12 @@ void parse_options(int argc, char ** argv)
     ccol =   EASY_COLS;
     crow =   EASY_ROWS;
     cmines = EASY_NUM_MINES;
+  }
+  else if(strcmp(argv[1], "help") == 0)
+  {
+    printf("'a' -> clear spot\n'f' -> place a flag\n'q' -> exit\n");
+    cleanup();
+    exit(0);
   } else {
     printf("Unknown difficulty\n");
     exit(1);
@@ -167,7 +180,10 @@ int generate_board(unsigned int num_mines, unsigned int num_cols, unsigned int n
   if(!gboard.board) return -1;
   gboard.number_mines = num_mines;
   
-  
+  // we are holding pointers to the mines which is why we
+  // use sizeof(gbox *) and not sizeof(gbox)
+  gboard.mines = (gbox **)malloc(sizeof(gbox **) * num_mines);
+
   int mines_placed = 0;
   
 
@@ -181,7 +197,7 @@ int generate_board(unsigned int num_mines, unsigned int num_cols, unsigned int n
     {
       
       loc->box_type = BOX_TYPE_MINE;
-
+      gboard.mines[i] = (gbox*)&loc;
       i++;
     } else continue;
   }
@@ -213,6 +229,7 @@ void init_board(unsigned int num_cols, unsigned int num_rows)
 void free_board()
 {
   if(gboard.board) free(gboard.board);
+  if(gboard.mines) free(gboard.mines);
 }
 
 
@@ -360,8 +377,12 @@ void cleanup()
 }
 
 // TODO: Actually implement this
-void gameover();
-
+void gameover()
+{
+  cleanup();
+  printf("Sorry, you lost :(\n");
+  exit(1);
+}
 
 void nc_print_board(WINDOW * win, int curx, int cury)
 {
@@ -369,22 +390,33 @@ void nc_print_board(WINDOW * win, int curx, int cury)
 	{
 		for(int c = 0; c < gboard.columns; c++)
 		{
+
 			if(r == curx && c == cury) wattron(win, A_REVERSE);
-			
+			else wattron(win, COLOR_PAIR(REVEALED_COLOR));
+
 			gbox * loc = &GET_LOC(r,c);
 
 			if(loc->is_revealed){
-				wprintw(win, "%d",loc->num_mines_around);
+				wprintw(win, "%d ",loc->num_mines_around);
 				
 
 			} else {
-				if(loc->is_flagged) wprintw(win,"F");
-				else wprintw(win, "o");
-			}
+				if(loc->is_flagged) {
+          wattron(win, COLOR_PAIR(FLAG_COLOR));
+          wprintw(win,"F ");
 
+        }
+				else {
+          wattroff(win, COLOR_PAIR(REVEALED_COLOR));
+          wprintw(win, "o ");
+        }
+      }
 
+			// wprintw(win," ");
+      wattroff(win, COLOR_PAIR(FLAG_COLOR));
 			wattroff(win, A_REVERSE);
-			wprintw(win," ");
+      wattroff(win, COLOR_PAIR(REVEALED_COLOR));
+
 		}
 	}
 	wrefresh(win);
@@ -406,7 +438,6 @@ void movement_handler()
 			case 'q':
 				cleanup();
 				exit(0);
-			
 			case KEY_UP:
 				currow--;
 				break;
@@ -424,6 +455,9 @@ void movement_handler()
 				set_flag(currow, curcol);
 				break;
 			}
+      case 'a':
+        reveal_location(currow, curcol);
+        break;
 			default:
 				continue;
 		}
@@ -445,8 +479,35 @@ void movement_handler()
 void set_flag(int x, int y)
 {
 	gbox * loc = &GET_LOC(x,y);
-	loc->is_flagged = true;
+	// loc->is_flagged = !loc->is_flagged;
+  // return;
+  if(!loc->is_flagged)
+  {
+    loc->is_flagged = true; 
+    gboard.flags_placed++;
+  }
+  else{
+    loc->is_flagged = false; 
+    gboard.flags_placed--;
+  }
 }
 
 
-void reveal_location(int x, int y);
+void reveal_location(int x, int y)
+{
+  // probably not necessary but better safe than sorry
+  if(x > gboard.columns || x < 0 || y > gboard.rows || y < 0) return;
+
+  gbox * loc = &GET_LOC(x,y);
+
+  if(loc->is_flagged) return;
+
+  else if(loc->is_revealed) return;
+  
+  else if(loc->box_type == BOX_TYPE_MINE) gameover();
+  
+  else{
+    loc->is_revealed = true;
+    gboard.num_places_revealed++;
+  }
+}
