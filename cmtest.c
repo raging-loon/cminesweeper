@@ -37,10 +37,12 @@ typedef struct gameboard
   gbox * board;
   gbox ** mines;
   unsigned int columns;
+  unsigned int size;
   unsigned int rows;
   unsigned int number_mines;
   unsigned int num_places_revealed;
   unsigned int flags_placed;
+  unsigned int num_mines_flagged;
 } gameboard;  
 
 gameboard gboard;
@@ -93,7 +95,8 @@ void movement_handler();
 void set_flag(int x, int y);
 void reveal_location(int x, int y);
 
-
+bool checkwin();
+void wingame();
 
 
 int main(int argc, char ** argv)
@@ -214,7 +217,8 @@ void init_board(unsigned int num_cols, unsigned int num_rows)
   memset(gboard.board, 0, sizeof(gbox) * (num_cols * num_rows));
   gboard.columns = num_cols;
   gboard.rows = num_rows;
-  printf("DEBUG: size: %dx%d\n",num_rows, num_cols);
+
+  gboard.size = num_cols * num_rows;
   for(int row = 0; row < gboard.rows; row++)
   {
     for(int col = 0; col < gboard.columns; col++)
@@ -472,7 +476,7 @@ void movement_handler()
 		clear();
 		wmove(gamewindow, 0, 0);
 		nc_print_board(gamewindow, currow, curcol);
-
+    if(checkwin()) wingame();
 	}	
 }
 
@@ -485,10 +489,12 @@ void set_flag(int x, int y)
   {
     loc->is_flagged = true; 
     gboard.flags_placed++;
+    if(loc->box_type == BOX_TYPE_MINE) gboard.num_mines_flagged++;
   }
   else{
     loc->is_flagged = false; 
     gboard.flags_placed--;
+    if(loc->box_type == BOX_TYPE_MINE) gboard.num_mines_flagged--;
   }
 }
 
@@ -510,4 +516,19 @@ void reveal_location(int x, int y)
     loc->is_revealed = true;
     gboard.num_places_revealed++;
   }
+}
+
+
+bool checkwin()
+{
+  if(gboard.num_mines_flagged == gboard.number_mines) return true;
+  if(gboard.num_places_revealed == gboard.size - gboard.number_mines) return true;
+  return false;
+}
+
+void wingame()
+{
+  cleanup();
+  printf("\n\nCongrats you win :)\n");
+  exit(0);
 }
