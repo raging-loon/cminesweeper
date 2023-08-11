@@ -1,5 +1,4 @@
 // This file is licensed under GPLv3 <https://www.gnu.org/licenses/>
-// Copyright Conner Macolley, 2022
 #include <stdio.h>
 #include <ncurses.h>
 #include <stdbool.h>
